@@ -37,7 +37,7 @@ http://me.alipay.com/wangbuke
 谢谢！
 
 """,
-    'author': 'wangbuke@gmail.com',
+    'author': 'wangbuke@gmail.com, META-IT',
     'website': 'http://buke.github.io',
     'depends': ['base'],
     'data': [
