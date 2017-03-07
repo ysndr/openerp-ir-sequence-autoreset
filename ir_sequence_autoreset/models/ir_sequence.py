@@ -99,7 +99,7 @@ class IrSequence(models.Model):
             self._cr.execute("SELECT nextval('ir_sequence_%03d')" % seq.id)
             number_next = self._cr.fetchone()[0]
         else:
-            number_next = _update_nogap(self, self.sequence_id.number_increment)
+            number_next = _update_nogap(self, self.number_increment)
 
         return seq.get_next_char(number_next)
 
