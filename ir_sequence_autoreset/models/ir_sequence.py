@@ -65,11 +65,12 @@ class IrSequence(models.Model):
 
     def _next_do(self):
         if self.implementation == 'standard':
-            current_time = ':'.join([self.reset_period, self._interpolation_dict().get(self.reset_period)])
-            if self.auto_reset and current_time != self.reset_time:
-                self._cr.execute("UPDATE ir_sequence SET reset_time=%s WHERE id=%s ", (current_time, self.id))
-                _alter_sequence(self._cr, "ir_sequence_%03d" % self.id, self.number_increment, self.reset_init_number)
-                self._cr.commit()
+            if self.auto_reset:
+                current_time = ':'.join([self.reset_period, self.reset_period])
+                if current_time != self.reset_time:
+                    self._cr.execute("UPDATE ir_sequence SET reset_time=%s WHERE id=%s ", (current_time, self.id))
+                    _alter_sequence(self._cr, "ir_sequence_%03d" % self.id, self.number_increment, self.reset_init_number)  # NoQA
+                    self._cr.commit()
             number_next = _select_nextval(self._cr, 'ir_sequence_%03d' % self.id)
         else:
             number_next = _update_nogap(self, self.number_increment)
@@ -81,11 +82,12 @@ class IrSequenceDateRange(models.Model):
 
     def _next(self):
         if self.sequence_id.implementation == 'standard':
-            current_time = ':'.join([self.reset_period, self._interpolation_dict().get(self.reset_period)])
-            if self.auto_reset and current_time != self.reset_time:
-                self._cr.execute("UPDATE ir_sequence SET reset_time=%s WHERE id=%s ", (current_time, self.id))
-                _alter_sequence(self._cr, "ir_sequence_%03d" % self.id, self.number_increment, self.reset_init_number)
-                self._cr.commit()
+            if self.auto_reset:
+                current_time = ':'.join([self.reset_period, self.reset_period])
+                if current_time != self.reset_time:
+                    self._cr.execute("UPDATE ir_sequence SET reset_time=%s WHERE id=%s ", (current_time, self.id))
+                    _alter_sequence(self._cr, "ir_sequence_%03d" % self.id, self.number_increment, self.reset_init_number)  # NoQA
+                    self._cr.commit()
             number_next = _select_nextval(self._cr, 'ir_sequence_%03d_%03d' % (self.sequence_id.id, self.id))
         else:
             number_next = _update_nogap(self, self.sequence_id.number_increment)
