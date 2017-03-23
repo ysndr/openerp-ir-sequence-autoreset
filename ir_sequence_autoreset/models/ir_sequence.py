@@ -77,7 +77,7 @@ class IrSequence(models.Model):
 
 
 class IrSequenceDateRange(models.Model):
-    _name = 'ir.sequence.date_range'
+    _inherit = 'ir.sequence.date_range'
 
     def _next(self):
         if self.sequence_id.implementation == 'standard':
