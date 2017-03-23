@@ -19,18 +19,8 @@
 #
 ##############################################################################
 
-from datetime import datetime
 from odoo import fields, models,  _
 from odoo.exceptions import UserError
-import pytz
-
-
-def _update_nogap(self, number_increment):
-    number_next = self.number_next
-    self._cr.execute("SELECT number_next FROM %s WHERE id=%s FOR UPDATE NOWAIT" % (self._table, self.id))
-    self._cr.execute("UPDATE %s SET number_next=number_next+%s WHERE id=%s " % (self._table, number_increment, self.id))  # NoQA
-    self.invalidate_cache(['number_next'], [self.id])
-    return number_next
 
 
 def _alter_sequence(cr, seq_name, number_increment=None, number_next=None):
@@ -49,6 +39,19 @@ def _alter_sequence(cr, seq_name, number_increment=None, number_next=None):
     cr.execute(statement)
 
 
+def _select_nextval(cr, seq_name):
+    cr.execute("SELECT nextval('%s')" % seq_name)
+    return cr.fetchone()
+
+
+def _update_nogap(self, number_increment):
+    number_next = self.number_next
+    self._cr.execute("SELECT number_next FROM %s WHERE id=%s FOR UPDATE NOWAIT" % (self._table, self.id))
+    self._cr.execute("UPDATE %s SET number_next=number_next+%s WHERE id=%s " % (self._table, number_increment, self.id))  # NoQA
+    self.invalidate_cache(['number_next'], [self.id])
+    return number_next
+
+
 class IrSequence(models.Model):
     _inherit = 'ir.sequence'
 
@@ -60,47 +63,30 @@ class IrSequence(models.Model):
     reset_time = fields.Char('Name', size=64, help="")
     reset_init_number = fields.Integer('Reset Number', default=1, required=True, help="Reset number of this sequence")
 
-    def _interpolation_dict(self):
-        now = range_date = effective_date = datetime.now(pytz.timezone(self._context.get('tz') or 'UTC'))
-        if self._context.get('ir_sequence_date'):
-            effective_date = datetime.strptime(self._context.get('ir_sequence_date'), '%Y-%m-%d')
-        if self._context.get('ir_sequence_date_range'):
-            range_date = datetime.strptime(self._context.get('ir_sequence_date_range'), '%Y-%m-%d')
-
-        sequences = {
-            'year': '%Y', 'month': '%m', 'day': '%d', 'y': '%y', 'doy': '%j', 'woy': '%W',
-            'weekday': '%w', 'h24': '%H', 'h12': '%I', 'min': '%M', 'sec': '%S'
-        }
-        res = {}
-        for key, format in sequences.iteritems():
-            res[key] = effective_date.strftime(format)
-            res['range_' + key] = range_date.strftime(format)
-            res['current_' + key] = now.strftime(format)
-
-        return res
-
-    def _next(self):
-        if not self.ids:
-            return False
-        force_company = self.env.context.get('force_company')
-        if not force_company:
-            force_company = self.env.user.company_id.id
-        sequences = self.browse(self.ids)
-        preferred_sequences = [s for s in sequences if s.company_id and s.company_id.id == force_company]
-        seq = preferred_sequences[0] if preferred_sequences else sequences[0]
-        if seq.implementation == 'standard':
-            current_time = ':'.join([seq.reset_period, self._interpolation_dict().get(seq.reset_period)])
-            if seq.auto_reset and current_time != seq.reset_time:
-                self._cr.execute("UPDATE ir_sequence SET reset_time=%s WHERE id=%s ", (current_time, seq.id))
-                _alter_sequence(self._cr, "ir_sequence_%03d" % seq.id,
-                                seq.number_increment, seq.reset_init_number)
+    def _next_do(self):
+        if self.implementation == 'standard':
+            current_time = ':'.join([self.reset_period, self._interpolation_dict().get(self.reset_period)])
+            if self.auto_reset and current_time != self.reset_time:
+                self._cr.execute("UPDATE ir_sequence SET reset_time=%s WHERE id=%s ", (current_time, self.id))
+                _alter_sequence(self._cr, "ir_sequence_%03d" % self.id, self.number_increment, self.reset_init_number)
                 self._cr.commit()
-
-            self._cr.execute("SELECT nextval('ir_sequence_%03d')" % seq.id)
-            number_next = self._cr.fetchone()[0]
+            number_next = _select_nextval(self._cr, 'ir_sequence_%03d' % self.id)
         else:
             number_next = _update_nogap(self, self.number_increment)
+        return self.get_next_char(number_next)
 
-        return seq.get_next_char(number_next)
 
-# vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4:
+class IrSequenceDateRange(models.Model):
+    _name = 'ir.sequence.date_range'
+
+    def _next(self):
+        if self.sequence_id.implementation == 'standard':
+            current_time = ':'.join([self.reset_period, self._interpolation_dict().get(self.reset_period)])
+            if self.auto_reset and current_time != self.reset_time:
+                self._cr.execute("UPDATE ir_sequence SET reset_time=%s WHERE id=%s ", (current_time, self.id))
+                _alter_sequence(self._cr, "ir_sequence_%03d" % self.id, self.number_increment, self.reset_init_number)
+                self._cr.commit()
+            number_next = _select_nextval(self._cr, 'ir_sequence_%03d_%03d' % (self.sequence_id.id, self.id))
+        else:
+            number_next = _update_nogap(self, self.sequence_id.number_increment)
+        return self.sequence_id.get_next_char(number_next)
